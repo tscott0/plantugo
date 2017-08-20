@@ -1,30 +1,33 @@
 package plantugo
 
-import "github.com/fogleman/gg"
+import (
+	"fmt"
+	"github.com/fogleman/gg"
+)
 
 type SequenceDiagram struct {
-	OutputFile                                       string
-	Height, Width                                    int
-	MarginTop, MarginLeft, MarginRight, MarginBottom float64
-	BgColour                                         string
-	ParticipantTemplate                              Participant
-	ParticipantSpacing                               float64
-	Participants                                     map[string]Participant
-	ParticipantKeys                                  []string
-	Messages                                         []Message
-	MessageSpacing                                   float64
+	OutputFile          string
+	Margin              float64
+	BgColour            string
+	Font                string
+	ParticipantTemplate Participant
+	ParticipantSpacing  float64
+	Participants        map[string]Participant
+	ParticipantKeys     []string
+	Messages            []Message
+	MessageSpacing      float64
+	MessageLineColour   string
+	MessageLineWidth    float64
+	MessageFontColour   string
+	MessageFontSize     float64
 }
 
 func NewSequenceDiagram() SequenceDiagram {
 	return SequenceDiagram{
 		OutputFile:         "out.png",
-		Width:              800,
-		Height:             800,
-		MarginTop:          50,
-		MarginLeft:         50,
-		MarginRight:        50,
-		MarginBottom:       50,
+		Margin:             50,
 		BgColour:           "#FFFFFF",
+		Font:               "Roboto-Regular.ttf",
 		ParticipantSpacing: 30,
 		ParticipantTemplate: Participant{
 			Height:     60,
@@ -32,15 +35,18 @@ func NewSequenceDiagram() SequenceDiagram {
 			LineWidth:  5,
 			LineColour: "#FFCC00",
 			BgColour:   "#DDFFDD",
-			Font:       "Roboto-Regular.ttf",
 			FontColour: "#1100DD",
 			FontSize:   28,
 			FontAlign:  gg.AlignCenter,
 		},
-		Participants:    make(map[string]Participant),
-		ParticipantKeys: make([]string, 0),
-		Messages:        make([]Message, 0),
-		MessageSpacing:  50,
+		Participants:      make(map[string]Participant),
+		ParticipantKeys:   make([]string, 0),
+		Messages:          make([]Message, 0),
+		MessageSpacing:    50,
+		MessageLineColour: "#119911",
+		MessageLineWidth:  2,
+		MessageFontColour: "#771111",
+		MessageFontSize:   18,
 	}
 }
 
@@ -48,10 +54,15 @@ func (s *SequenceDiagram) AddParticipant(name string) {
 	np := s.ParticipantTemplate
 	s.Participants[name] = np
 	s.ParticipantKeys = append(s.ParticipantKeys, name)
+	fmt.Printf("Added %q. Total participants: %v\n", name, len(s.Participants))
 }
 
 func (s *SequenceDiagram) Message(from, to, message string) {
 	s.Messages = append(s.Messages, Message{from, to, message})
+
+	// Insert participants if not explicitly created
+	s.ParticipantIndex(from)
+	s.ParticipantIndex(to)
 }
 
 func (s *SequenceDiagram) ParticipantIndex(name string) int {
@@ -69,12 +80,20 @@ func (s *SequenceDiagram) ParticipantIndex(name string) int {
 }
 
 func (s *SequenceDiagram) Draw() {
-	dc := gg.NewContext(s.Width, s.Height)
+	// Calculate the width of the image
+	w := int(2 * s.Margin)
+	w += len(s.Participants) * int(s.ParticipantTemplate.Width)
+	w += (len(s.Participants) - 1) * int(s.ParticipantSpacing)
+
+	// TODO: Calculate the height of the image
+	h := 800
+
+	dc := gg.NewContext(w, h)
 	dc.SetHexColor(s.BgColour)
 	dc.Clear()
 
 	// Translate to provide top and left margins
-	dc.Translate(s.MarginLeft, s.MarginTop)
+	dc.Translate(s.Margin, s.Margin)
 
 	dc.Push()
 	for _, name := range s.ParticipantKeys {
@@ -104,7 +123,7 @@ func (s *SequenceDiagram) Draw() {
 
 		// Text
 		dc.SetHexColor(v.FontColour)
-		if err := dc.LoadFontFace(v.Font, v.FontSize); err != nil {
+		if err := dc.LoadFontFace(s.Font, v.FontSize); err != nil {
 			panic(err)
 		}
 
@@ -113,7 +132,8 @@ func (s *SequenceDiagram) Draw() {
 
 		dc.DrawStringWrapped(name,
 			0, yPos,
-			0, 0, v.Width, 1.5, v.FontAlign)
+			0, 0, v.Width,
+			1.5, v.FontAlign)
 
 		dc.Pop()
 
@@ -125,18 +145,69 @@ func (s *SequenceDiagram) Draw() {
 	dc.Translate(0, s.ParticipantTemplate.Height+s.MessageSpacing)
 	for _, m := range s.Messages {
 		dc.Push()
+
+		// Message line
 		fromIndex := s.ParticipantIndex(m.From)
 		toIndex := s.ParticipantIndex(m.To)
 
-		dc.DrawLine((s.ParticipantTemplate.Width/2)+(float64(fromIndex)*(s.ParticipantTemplate.Width+s.ParticipantSpacing)),
+		originX := s.ParticipantTemplate.Width / 2
+		originX += float64(fromIndex) * (s.ParticipantTemplate.Width + s.ParticipantSpacing)
+
+		destinationX := s.ParticipantTemplate.Width / 2
+		destinationX += float64(toIndex) * (s.ParticipantTemplate.Width + s.ParticipantSpacing)
+
+		dc.DrawLine(originX,
 			0,
-			(s.ParticipantTemplate.Width/2)+(float64(toIndex)*(s.ParticipantTemplate.Width+s.ParticipantSpacing)),
+			destinationX,
 			0)
 
-		dc.SetLineWidth(2)
-		dc.SetHexColor(s.ParticipantTemplate.LineColour)
+		dc.SetLineWidth(s.MessageLineWidth)
+		dc.SetHexColor(s.MessageLineColour)
 		//dc.SetDash(8, 8)
+
 		dc.Stroke()
+
+		// Arrow
+		dc.Push()
+		dc.Translate(destinationX, 0)
+
+		dc.LineTo(0, 0)
+		if originX < destinationX {
+			dc.LineTo(-16, -8)
+			dc.LineTo(-16, 8)
+		} else {
+			dc.LineTo(16, -8)
+			dc.LineTo(16, 8)
+		}
+		dc.LineTo(0, 0)
+
+		dc.SetLineWidth(s.MessageLineWidth)
+		dc.SetHexColor(s.MessageLineColour)
+		dc.Fill()
+		dc.StrokePreserve()
+		dc.Pop()
+
+		// Message text
+		dc.SetHexColor(s.MessageFontColour)
+		if err := dc.LoadFontFace(s.Font, s.MessageFontSize); err != nil {
+			panic(err)
+		}
+
+		// Attempt to align font vertically above the message line
+		yMessageOffset := -10 - s.MessageFontSize/2 - s.MessageLineWidth
+
+		if originX < destinationX {
+			dc.DrawStringWrapped(m.Message,
+				originX, yMessageOffset,
+				-0.05, 0, s.ParticipantTemplate.Width,
+				1.5, gg.AlignLeft)
+		} else {
+			dc.DrawStringWrapped(m.Message,
+				originX, yMessageOffset,
+				1.05, 0, s.ParticipantTemplate.Width,
+				1.5, gg.AlignRight)
+		}
+
 		dc.Pop()
 
 		dc.Translate(0, s.MessageSpacing)

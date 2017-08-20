@@ -7,7 +7,6 @@ type Participant struct {
 	LineWidth     float64
 	LineColour    string
 	BgColour      string
-	Font          string
 	FontColour    string
 	FontSize      float64
 	FontAlign     gg.Align
