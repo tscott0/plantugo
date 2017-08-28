@@ -50,24 +50,61 @@ func NewSequenceDiagram() SequenceDiagram {
 	}
 }
 
-func (s *SequenceDiagram) AddParticipant(name string) {
+func (s *SequenceDiagram) Participant(name string) {
 	np := s.ParticipantTemplate
+	np.Name = name
 	s.Participants[name] = np
+
 	s.ParticipantKeys = append(s.ParticipantKeys, name)
 	fmt.Printf("Added %q. Total participants: %v\n", name, len(s.Participants))
 }
 
-func (s *SequenceDiagram) Message(from, to, message string) {
-	s.Messages = append(s.Messages, Message{from, to, message})
+func (s *SequenceDiagram) Message(from, to, message string, styles ...MessageStyler) Message {
+	m := Message{
+		From:       from,
+		To:         to,
+		Message:    message,
+		LineStyle:  SolidLine,
+		ArrowStyle: SolidArrow,
+	}
+
+	for _, style := range styles {
+		style.StyleMessage(&m)
+	}
+
+	s.Messages = append(s.Messages, m)
 
 	// Insert participants if not explicitly created
 	s.ParticipantIndex(from)
 	s.ParticipantIndex(to)
+
+	return m
+}
+
+func (s *SequenceDiagram) MessageSelf(participant, message string, styles ...MessageStyler) Message {
+	m := Message{
+		From:       participant,
+		To:         participant,
+		Message:    message,
+		LineStyle:  SolidLine,
+		ArrowStyle: SolidArrow,
+	}
+
+	for _, style := range styles {
+		style.StyleMessage(&m)
+	}
+
+	s.Messages = append(s.Messages, m)
+
+	// Insert participants if not explicitly created
+	s.ParticipantIndex(participant)
+
+	return m
 }
 
 func (s *SequenceDiagram) ParticipantIndex(name string) int {
 	if _, ok := s.Participants[name]; !ok {
-		s.AddParticipant(name)
+		s.Participant(name)
 	}
 
 	for i, v := range s.ParticipantKeys {
@@ -79,138 +116,42 @@ func (s *SequenceDiagram) ParticipantIndex(name string) int {
 	return -1
 }
 
-func (s *SequenceDiagram) Draw() {
+func (s *SequenceDiagram) Dimensions() (int, int) {
 	// Calculate the width of the image
 	w := int(2 * s.Margin)
 	w += len(s.Participants) * int(s.ParticipantTemplate.Width)
 	w += (len(s.Participants) - 1) * int(s.ParticipantSpacing)
 
+	w += int(s.ParticipantTemplate.Width) // TODO: Temporary extra width
+
 	// TODO: Calculate the height of the image
 	h := 800
 
-	dc := gg.NewContext(w, h)
+	return w, h
+}
+
+func (s *SequenceDiagram) Draw() {
+	dc := gg.NewContext(s.Dimensions())
 	dc.SetHexColor(s.BgColour)
 	dc.Clear()
 
 	// Translate to provide top and left margins
 	dc.Translate(s.Margin, s.Margin)
 
+	// PARTICIPANTS
 	dc.Push()
 	for _, name := range s.ParticipantKeys {
-		dc.Push()
-
-		v := s.Participants[name]
-
-		// Vertices
-		dc.Push()
-		dc.DrawLine(v.Width/2, v.Height, v.Width/2, v.Width/2+600)
-		dc.SetLineWidth(3)
-		dc.SetHexColor(v.LineColour)
-		dc.SetDash(8, 8)
-		dc.Stroke()
-		dc.Pop()
-
-		// Rectangle outline
-		dc.Push()
-		dc.DrawRectangle(0, 0, v.Width, v.Height)
-		dc.SetLineWidth(v.LineWidth)
-		dc.SetHexColor(v.LineColour)
-		dc.StrokePreserve()
-		// Rectangle background
-		dc.SetHexColor(v.BgColour)
-		dc.Fill()
-		dc.Pop()
-
-		// Text
-		dc.SetHexColor(v.FontColour)
-		if err := dc.LoadFontFace(s.Font, v.FontSize); err != nil {
-			panic(err)
-		}
-
-		// A rough way to get the text to be centred vertically
-		yPos := (v.Height / 2) - (v.FontSize / 3)
-
-		dc.DrawStringWrapped(name,
-			0, yPos,
-			0, 0, v.Width,
-			1.5, v.FontAlign)
-
-		dc.Pop()
-
-		dc.Translate(v.Width+s.ParticipantSpacing, 0)
+		p := s.Participants[name]
+		p.Draw(s, dc)
+		dc.Translate(p.Width+s.ParticipantSpacing, 0)
 	}
 	dc.Pop()
 
+	// MESSAGES
 	dc.Push()
 	dc.Translate(0, s.ParticipantTemplate.Height+s.MessageSpacing)
 	for _, m := range s.Messages {
-		dc.Push()
-
-		// Message line
-		fromIndex := s.ParticipantIndex(m.From)
-		toIndex := s.ParticipantIndex(m.To)
-
-		originX := s.ParticipantTemplate.Width / 2
-		originX += float64(fromIndex) * (s.ParticipantTemplate.Width + s.ParticipantSpacing)
-
-		destinationX := s.ParticipantTemplate.Width / 2
-		destinationX += float64(toIndex) * (s.ParticipantTemplate.Width + s.ParticipantSpacing)
-
-		dc.DrawLine(originX,
-			0,
-			destinationX,
-			0)
-
-		dc.SetLineWidth(s.MessageLineWidth)
-		dc.SetHexColor(s.MessageLineColour)
-		//dc.SetDash(8, 8)
-
-		dc.Stroke()
-
-		// Arrow
-		dc.Push()
-		dc.Translate(destinationX, 0)
-
-		dc.LineTo(0, 0)
-		if originX < destinationX {
-			dc.LineTo(-16, -8)
-			dc.LineTo(-16, 8)
-		} else {
-			dc.LineTo(16, -8)
-			dc.LineTo(16, 8)
-		}
-		dc.LineTo(0, 0)
-
-		dc.SetLineWidth(s.MessageLineWidth)
-		dc.SetHexColor(s.MessageLineColour)
-		dc.Fill()
-		dc.StrokePreserve()
-		dc.Pop()
-
-		// Message text
-		dc.SetHexColor(s.MessageFontColour)
-		if err := dc.LoadFontFace(s.Font, s.MessageFontSize); err != nil {
-			panic(err)
-		}
-
-		// Attempt to align font vertically above the message line
-		yMessageOffset := -10 - s.MessageFontSize/2 - s.MessageLineWidth
-
-		if originX < destinationX {
-			dc.DrawStringWrapped(m.Message,
-				originX, yMessageOffset,
-				-0.05, 0, s.ParticipantTemplate.Width,
-				1.5, gg.AlignLeft)
-		} else {
-			dc.DrawStringWrapped(m.Message,
-				originX, yMessageOffset,
-				1.05, 0, s.ParticipantTemplate.Width,
-				1.5, gg.AlignRight)
-		}
-
-		dc.Pop()
-
-		dc.Translate(0, s.MessageSpacing)
+		m.Draw(s, dc)
 	}
 	dc.Pop()
 

@@ -7,13 +7,20 @@ import (
 func main() {
 
 	sd := plantugo.NewSequenceDiagram()
-	sd.AddParticipant("Anna")
-	sd.AddParticipant("Bob")
+	sd.Participant("Anna")
+	sd.Participant("Bob")
 
 	sd.Message("Anna", "Bob", "Hello")
-	sd.Message("Bob", "Anna", "How are you?")
+	sd.Message("Bob", "Anna", "How are you?",
+		plantugo.DashedLine, plantugo.EmptyArrow)
+	sd.Message("Anna", "Bob", "Fine thanks")
 	sd.Message("Claire", "Bob", "What time is it?")
-	sd.Message("Bob", "Claire", "I don't know")
+
+	sd.MessageSelf("Claire", "Making sandwich",
+		plantugo.DashedLine)
+	sd.Message("Bob", "Bob", "I don't know")
+
+	sd.Message("Claire", "Anna", "All the way back", plantugo.EmptyArrow)
 
 	sd.Draw()
 }
