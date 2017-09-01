@@ -37,13 +37,29 @@ func (m *Message) draw(s *SequenceDiagram, dc *gg.Context) {
 	destinationX := s.ParticipantTemplate.Width / 2
 	destinationX += float64(toIndex) * (s.ParticipantTemplate.Width + s.ParticipantSpacing)
 
+	leftToRight := false
+	if originX < destinationX {
+		leftToRight = true
+	}
+
+	// Adjust for the width of the vertical activity line
+	lineWidth := float64(4)
+	if leftToRight {
+		originX += lineWidth / 2
+		destinationX -= lineWidth / 2
+	} else {
+		originX -= lineWidth / 2
+		destinationX += lineWidth / 2
+	}
+
 	dc.DrawLine(originX,
 		0,
 		destinationX,
 		0)
 
-	dc.SetLineWidth(s.MessageLineWidth)
+	dc.SetLineWidth(s.MessageLineWidth * 10)
 	dc.SetHexColor(s.MessageLineColour)
+	dc.SetLineCapButt()
 
 	if m.LineStyle == DashedLine {
 		dc.SetDash(4, 4)
@@ -58,7 +74,7 @@ func (m *Message) draw(s *SequenceDiagram, dc *gg.Context) {
 	dc.Translate(destinationX, 0)
 
 	dc.LineTo(0, 0)
-	if originX < destinationX {
+	if leftToRight {
 		dc.LineTo(-16, -8)
 		dc.LineTo(-16, 8)
 	} else {
@@ -113,6 +129,10 @@ func (m *Message) drawSelf(s *SequenceDiagram, dc *gg.Context) {
 
 	originX := s.ParticipantTemplate.Width / 2
 	originX += float64(fromIndex) * (s.ParticipantTemplate.Width + s.ParticipantSpacing)
+
+	// Adjust for the width of the vertical activity line
+	lineWidth := float64(4)
+	originX += lineWidth / 2
 
 	dc.Push()
 	dc.Translate(originX, 0)

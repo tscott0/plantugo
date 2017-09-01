@@ -18,10 +18,11 @@ func (p *Participant) Draw(s *SequenceDiagram, dc *gg.Context) {
 
 	// Vertices
 	dc.Push()
-	dc.DrawLine(p.Width/2, p.Height, p.Width/2, p.Width/2+600)
-	dc.SetLineWidth(3)
+	dc.DrawLine(p.Width/2, p.Height, p.Width/2, p.Width/2+600) // TODO: Remove magic number
+	dc.SetLineWidth(p.LineWidth)
 	dc.SetHexColor(p.LineColour)
-	dc.SetDash(8, 8)
+	dc.SetLineCapButt()
+	dc.SetDash(8, 6)
 	dc.Stroke()
 	dc.Pop()
 
@@ -31,6 +32,7 @@ func (p *Participant) Draw(s *SequenceDiagram, dc *gg.Context) {
 	dc.SetLineWidth(p.LineWidth)
 	dc.SetHexColor(p.LineColour)
 	dc.StrokePreserve()
+
 	// Rectangle background
 	dc.SetHexColor(p.BgColour)
 	dc.Fill()
